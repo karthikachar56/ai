@@ -1158,6 +1158,16 @@
     }
     /* Mobile responsive optimizations for the typing system and floating mic */
     @media (max-width: 767px) {
+      .sidebar {
+        width: min(280px, 85vw);
+      }
+      .message-row {
+        width: 92%;
+        gap: 10px;
+      }
+      .bubble-wrapper {
+        max-width: calc(100% - 38px);
+      }
       .timeline {
         padding: 16px 12px 140px 12px; /* Reduced bottom padding */
       }
@@ -1183,10 +1193,29 @@
         color: #475569;
       }
       .mic-section {
-        bottom: 80px; /* Moved closer to the bottom input bar */
-        right: 16px; /* Moved closer to the edge */
+        position: absolute;
+        bottom: 84px;
+        left: 16px;
+        right: 16px;
+        width: auto;
+        transform: none;
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: space-between;
+        align-items: center;
         gap: 8px;
-        padding: 8px 8px 8px 16px;
+        padding: 8px 12px 8px 16px;
+        border-radius: 9999px;
+      }
+      .mic-section.idle {
+        padding: 0;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        left: auto;
+        right: 16px;
+        width: auto;
       }
       .mic-btn {
         height: 64px;
@@ -1199,6 +1228,10 @@
       }
       .mic-status-text {
         font-size: 10px;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .equalizer {
         gap: 3px;
@@ -1956,7 +1989,6 @@
 
         rec.onstart = () => {
           isListening = true;
-          finalTranscriptBuffer = '';
           if (speechTimeout) clearTimeout(speechTimeout);
           // Set status to listening if not speaking
           if (status !== 'speaking') {
@@ -2079,6 +2111,7 @@
         }
       } else {
         isContinuousListening = true;
+        finalTranscriptBuffer = ''; // Clear buffer on fresh user-initiated start
         if (recognition) {
           try {
             updateStatusUI('listening');
