@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eetirp - Corporate Portal Registration</title>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg-main: #f8fafc;
+      --bg-card: rgba(255, 255, 255, 0.85);
+      --border-color: #e2e8f0;
+      --border-focus: #2563eb;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --purple-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      --purple-gradient-hover: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Background glow decorations */
+    .bg-decorations {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .bg-glow-1 {
+      position: absolute;
+      top: -10%;
+      left: -10%;
+      width: 50%;
+      height: 50%;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.05);
+      filter: blur(120px);
+    }
+    .bg-glow-2 {
+      position: absolute;
+      bottom: -10%;
+      right: -10%;
+      width: 50%;
+      height: 50%;
+      border-radius: 50%;
+      background: rgba(13, 148, 136, 0.05);
+      filter: blur(120px);
+    }
+
+    /* Register Container */
+    .register-container {
+      width: 100%;
+      max-width: 440px;
+      padding: 24px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .register-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 32px 28px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Header Branding */
+    .brand-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-align: center;
+    }
+    .brand-logo {
+      height: 40px;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .brand-tagline {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* Forms */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .form-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 10px 14px 10px 42px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      background: white;
+    }
+
+    /* Alert Banner */
+    .alert-banner {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .alert-banner.error {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #dc2626;
+    }
+    .alert-banner.warning {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      color: #b45309;
+    }
+
+    /* Submit Button */
+    .btn-submit {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--purple-gradient);
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+      margin-top: 4px;
+    }
+    .btn-submit:hover {
+      background: var(--purple-gradient-hover);
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
+    }
+    .btn-submit:active {
+      transform: scale(0.98);
+    }
+    .btn-submit:disabled {
+      background: #cbd5e1;
+      box-shadow: none;
+      cursor: not-allowed;
+      color: #64748b;
+    }
+
+    /* Footer links */
+    .card-footer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .card-link {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .card-link:hover {
+      color: #1d4ed8;
+      text-decoration: underline;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BACKGROUND DECORATIONS -->
+  <div class="bg-decorations">
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+  </div>
+
+  <!-- REGISTRATION PANEL -->
+  <div class="register-container">
+    <div class="register-card">
+      
+      <!-- Brand Logo header -->
+      <div class="brand-header">
+        <img src="/logo.jpg" alt="Eetirp Logo" class="brand-logo">
+        <h1 class="brand-name">Create Account</h1>
+        <p class="brand-tagline">Access the Eetirp Portal</p>
+      </div>
+
+      <!-- Alert banners -->
+      <div class="alert-banner" id="alertBox">
+        <span id="alertIconContainer" style="display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <i data-lucide="alert-circle" style="height: 16px; width: 16px;"></i>
+        </span>
+        <span id="alertMsg">Error message</span>
+      </div>
+
+      <!-- Registration Form -->
+      <form id="registerForm">
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="user" style="height: 16px; width: 16px;"></i>
+            <input class="form-input" type="text" id="username" placeholder="e.g. johndoe" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Corporate Email</label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="mail" style="height: 16px; width: 16px;"></i>
+            <input class="form-input" type="email" id="email" placeholder="e.g. john@company.com" required autocomplete="email">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="lock" style="height: 16px; width: 16px;"></i>
+            <input class="form-input" type="password" id="password" placeholder="Create a strong password" required autocomplete="new-password">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="confirmPassword">Confirm Password</label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="shield-check" style="height: 16px; width: 16px;"></i>
+            <input class="form-input" type="password" id="confirmPassword" placeholder="Repeat the password" required autocomplete="new-password">
+          </div>
+        </div>
+
+        <button class="btn-submit" type="submit" id="submitBtn">
+          <span>Register Now</span>
+          <i data-lucide="user-plus" style="height: 16px; width: 16px;"></i>
+        </button>
+      </form>
+
+      <!-- Footer sign in redirect -->
+      <div class="card-footer">
+        Already have an account? 
+        <a class="card-link" href="/login">Sign In</a>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Initialize icons
+    lucide.createIcons();
+
+    const registerForm = document.getElementById('registerForm');
+    const usernameInput = document.getElementById('username');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+    const alertBox = document.getElementById('alertBox');
+    const alertMsg = document.getElementById('alertMsg');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Check system connection status on load
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const response = await fetch('/api/status');
+        if (response.ok) {
+          const data = await response.json();
+          if (!data.isMongoActive) {
+            showAlert("Database connection is currently offline. Registration cannot be performed.", "error");
+            submitBtn.disabled = true;
+          }
+        }
+      } catch (err) {
+        console.error("Connection check failed:", err);
+      }
+    });
+
+    function showAlert(msg, type = "error") {
+      alertMsg.textContent = msg;
+      alertBox.className = `alert-banner ${type}`;
+      alertBox.style.display = 'flex';
+      
+      const iconName = type === "warning" ? 'alert-triangle' : 'alert-circle';
+      const iconContainer = document.getElementById('alertIconContainer');
+      if (iconContainer) {
+        iconContainer.innerHTML = `<i data-lucide="${iconName}" style="height: 16px; width: 16px;"></i>`;
+        lucide.createIcons();
+      }
+    }
+
+    function hideAlert() {
+      alertBox.style.display = 'none';
+    }
+
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert();
+
+      const username = usernameInput.value.trim();
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      const confirmPassword = confirmPasswordInput.value;
+
+      if (!username || !email || !password || !confirmPassword) {
+        showAlert("All fields are required.");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        showAlert("Passwords do not match. Please verify.");
+        return;
+      }
+
+      if (password.length < 6) {
+        showAlert("Password must be at least 6 characters long.");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.querySelector('span').textContent = "Registering...";
+
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Success redirection to console dashboard (session is set by backend)
+          window.location.href = '/';
+        } else {
+          showAlert(data.error?.message || "Registration failed. Try again.");
+          submitBtn.disabled = false;
+          submitBtn.querySelector('span').textContent = "Register Now";
+        }
+      } catch (err) {
+        console.error("Registration request failed:", err);
+        showAlert("Failed to connect to registration server. Please check your network.");
+        submitBtn.disabled = false;
+        submitBtn.querySelector('span').textContent = "Register Now";
+      }
+    });
+  </script>
+</body>
+</html>
