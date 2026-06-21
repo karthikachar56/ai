@@ -1462,6 +1462,9 @@
     let isSettingsOpen = false;
     let isHistoryOpen = false;
     let speechLanguage = localStorage.getItem('aura_speech_language') || 'en-US';
+    
+    // Request Abort Controller for stopping previous responses instantly on new input
+    let activeAbortController = null;
 
     // Chat History state
     let conversations = [];
@@ -2132,6 +2135,12 @@
 
     // SYSTEM INTEGRATION: Gemini Content Generation & TTS APIs
     async function handleSendMessage(textToSend = '', wasVoice = false) {
+      // Abort any existing in-flight AI generation or TTS synthesis requests instantly
+      if (activeAbortController) {
+        activeAbortController.abort();
+        activeAbortController = null;
+      }
+
       stopAudioPlayback();
       const typedText = chatInput.value.trim();
       const text = textToSend ? textToSend.trim() : typedText;
@@ -2174,40 +2183,59 @@
 
       // Retrieve entire update history context
       const currentConv = conversations.find(c => c.id === activeConvId);
+
+      // Create new AbortController for this request sequence
+      activeAbortController = new AbortController();
+      const currentSignal = activeAbortController.signal;
       
-      // Get AI text response
-      const responseText = await generateAiResponse(currentConv.messages, text);
+      try {
+        // Get AI text response
+        const responseText = await generateAiResponse(currentConv.messages, text, currentSignal);
 
-      const newAiMessage = {
-        id: 'ai-' + Date.now(),
-        sender: 'ai',
-        text: responseText,
-        timestamp: getFormattedTime(),
-        isVoice: !isAudioMuted
-      };
+        // If this request sequence was aborted, do not proceed at all
+        if (currentSignal.aborted) return;
 
-      // Push AI Response
-      conversations = conversations.map(c => {
-        if (c.id === activeConvId) {
-          return { ...c, messages: [...c.messages, newAiMessage] };
+        const newAiMessage = {
+          id: 'ai-' + Date.now(),
+          sender: 'ai',
+          text: responseText,
+          timestamp: getFormattedTime(),
+          isVoice: !isAudioMuted
+        };
+
+        // Push AI Response
+        conversations = conversations.map(c => {
+          if (c.id === activeConvId) {
+            return { ...c, messages: [...c.messages, newAiMessage] };
+          }
+          return c;
+        });
+
+        renderSidebar();
+        renderChatTimeline();
+        saveState();
+
+        // Synthesis step if configured
+        const isError = responseText.startsWith('Connection error') || responseText.startsWith('Please configure');
+        if (!isAudioMuted && !isError) {
+          await speakAiResponse(responseText, currentSignal);
+        } else {
+          updateStatusUI('idle');
         }
-        return c;
-      });
-
-      renderSidebar();
-      renderChatTimeline();
-      saveState();
-
-      // Synthesis step if configured
-      const isError = responseText.startsWith('Connection error') || responseText.startsWith('Please configure');
-      if (!isAudioMuted && !isError) {
-        await speakAiResponse(responseText);
-      } else {
-        updateStatusUI('idle');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          console.log("AI generation request aborted successfully.");
+          return;
+        }
+        console.error("AI response flow error:", err);
+      } finally {
+        if (activeAbortController?.signal === currentSignal) {
+          activeAbortController = null;
+        }
       }
     }
 
-    async function generateAiResponse(historyMessages, latestUserText) {
+    async function generateAiResponse(historyMessages, latestUserText, signal) {
       updateStatusUI('thinking');
 
       const systemPrompt = "You are Eetirp, an engaging and highly helpful AI Voice Companion. IMPORTANT: Respond in the exact language the user speaks or writes in (e.g. if they query in Nepali, you must respond in Nepali). Format your responses with structured markdown, utilizing bold text for key numbers and titles, clear headings, and bullet points for lists and classifications (similar to detailed cataloguing cards or Dewey Decimal Classification breakdowns) to make the text visually appealing and structured. Keep text flow easy to read aloud, avoiding long code blocks.";
@@ -2229,16 +2257,19 @@
       const url = `/api/generate-content`;
 
       try {
-        const responseData = await fetchWithRetry(url, payload);
+        const responseData = await fetchWithRetry(url, payload, 5, 1000, signal);
         const text = responseData.choices?.[0]?.message?.content || "I was unable to formulate a response. Please try again.";
         return text;
       } catch (err) {
+        if (err.name === 'AbortError') {
+          throw err;
+        }
         console.error("API Call error:", err);
         return `Connection error: ${err.message || "Failed to reach AI service."} Please ensure your API key is correctly configured.`;
       }
     }
 
-    async function fetchWithRetry(url, payload, retries = 5, delay = 1000) {
+    async function fetchWithRetry(url, payload, retries = 5, delay = 1000, signal) {
       const headers = { 'Content-Type': 'application/json' };
       if (apiKey && apiKey.trim() !== '') {
         headers['x-openai-key'] = apiKey;
@@ -2249,7 +2280,8 @@
           const response = await fetch(url, {
             method: 'POST',
             headers: headers,
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: signal
           });
           if (response.ok) {
             return await response.json();
@@ -2258,17 +2290,19 @@
             const errBody = await response.json().catch(() => ({}));
             throw new Error(errBody.error?.message || `HTTP ${response.status}`);
           }
-        } catch (error) {
-          if (i === retries - 1) throw error;
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            throw err; // Stop retry loops immediately on abort
+          }
+          if (i === retries - 1) throw err;
+          await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
         }
-        // Exponential wait backoff
-        await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
       }
       throw new Error("Failed after maximum retries");
     }
 
     // OpenAI voice generation to binary audio converter
-    async function speakAiResponse(textToSpeak) {
+    async function speakAiResponse(textToSpeak, signal) {
       if (isAudioMuted) return;
 
       updateStatusUI('speaking');
@@ -2289,14 +2323,19 @@
         const res = await fetch(ttsUrl, {
           method: 'POST',
           headers: headers,
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: signal
         });
+
+        if (signal?.aborted) return;
 
         if (!res.ok) {
           throw new Error(`TTS API yields error status: ${res.status}`);
         }
 
         const audioBlob = await res.blob();
+        if (signal?.aborted) return;
+
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         
@@ -2322,13 +2361,23 @@
           }
         };
 
+        if (signal?.aborted) {
+          URL.revokeObjectURL(audioUrl);
+          return;
+        }
+
         await audio.play();
         if (isContinuousListening && !isAudioMuted) {
           startSpeechRecognition();
         }
       } catch (err) {
+        if (err.name === 'AbortError') {
+          console.log("TTS audio generation was aborted successfully.");
+          return;
+        }
         console.error("OpenAI TTS query failed, running WebSpeech synthesizers fallback:", err);
         // Fallback WebSpeech API
+        if (signal?.aborted) return;
         if ('speechSynthesis' in window) {
           const utterance = new SpeechSynthesisUtterance(textToSpeak);
           utterance.onend = () => {
