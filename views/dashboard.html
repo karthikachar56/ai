@@ -996,15 +996,19 @@
     }
     .typing-input {
       width: 100%;
+      height: 52px; /* Default height */
       background: #ffffff;
       border: 2px solid #cbd5e1; /* Darker, clearly visible gray border */
       border-radius: 16px;
-      padding: 16px 56px 16px 18px;
+      padding: 14px 56px 14px 18px;
       color: var(--text-main);
       font-size: 14px;
+      line-height: 20px;
       outline: none;
+      resize: none;
+      overflow-y: hidden;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      transition: all 0.2s ease-in-out;
+      transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
     }
     .typing-input:hover {
       border-color: #94a3b8;
@@ -1019,8 +1023,7 @@
     .send-btn {
       position: absolute;
       right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
+      bottom: 8px;
       background: rgba(37, 99, 235, 0.05);
       color: rgba(37, 99, 235, 0.4);
       border: 1px solid rgba(37, 99, 235, 0.1);
@@ -1043,7 +1046,7 @@
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
     }
     .send-btn.active:active {
-      transform: translateY(-50%) scale(0.95);
+      transform: scale(0.95);
     }
 
     /* Animations */
@@ -1178,11 +1181,13 @@
       }
       .typing-input {
         font-size: 16px; /* Prevents auto-zoom on iOS Safari */
-        height: 52px; /* Explicit height to make it large and easily tapable */
-        padding: 0 52px 0 20px; /* clear padding inside */
+        height: 52px; /* Explicit initial height */
+        padding: 14px 48px 14px 16px; /* clear padding inside for vertical alignment */
         border: 2px solid #2563eb; /* High-contrast solid blue border */
         background: #ffffff;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+        resize: none;
+        overflow-y: hidden;
       }
       .typing-input:focus {
         background: #ffffff;
@@ -1428,7 +1433,7 @@
           <!-- Typed text input box -->
           <div class="typing-bar">
             <form class="typing-form" id="chatForm">
-              <input type="text" class="typing-input" id="chatInput" placeholder="Ask me something by typing here..." autocomplete="off">
+              <textarea class="typing-input" id="chatInput" placeholder="Ask me something by typing here..." rows="1" autocomplete="off"></textarea>
               <button type="submit" class="send-btn" id="sendBtn" title="Send text message" disabled>
                 <i data-lucide="send" style="height: 16px; width: 16px;"></i>
               </button>
@@ -2057,6 +2062,7 @@
             chatInput.value = currentText;
             sendBtn.disabled = false;
             sendBtn.classList.add('active');
+            adjustInputHeight();
           }
 
           // Debounce user silence to 3 seconds before submitting
@@ -2153,6 +2159,8 @@
 
       // Clean inputs
       chatInput.value = '';
+      chatInput.style.height = '52px';
+      chatInput.style.overflowY = 'hidden';
       sendBtn.disabled = true;
       sendBtn.classList.remove('active');
 
@@ -2449,6 +2457,21 @@
       return new Blob([wavFile], { type: 'audio/wav' });
     }
 
+    // Helper function to auto-grow textarea height like ChatGPT
+    function adjustInputHeight() {
+      if (!chatInput) return;
+      const borderHeight = chatInput.offsetHeight - chatInput.clientHeight;
+      chatInput.style.height = 'auto';
+      const targetHeight = chatInput.scrollHeight + borderHeight;
+      if (targetHeight > 160) {
+        chatInput.style.height = '160px';
+        chatInput.style.overflowY = 'auto';
+      } else {
+        chatInput.style.height = (targetHeight > 52 ? targetHeight : 52) + 'px';
+        chatInput.style.overflowY = 'hidden';
+      }
+    }
+
     // EVENT CONTROLLERS
     function setupEventListeners() {
       // Sidebar drawer controls
@@ -2524,7 +2547,7 @@
         handleSendMessage();
       });
 
-      // Enable/disable send text button dynamically
+      // Enable/disable send text button dynamically and adjust textarea height
       chatInput.addEventListener('input', () => {
         const text = chatInput.value.trim();
         if (text) {
@@ -2533,6 +2556,18 @@
         } else {
           sendBtn.disabled = true;
           sendBtn.classList.remove('active');
+        }
+        adjustInputHeight();
+      });
+
+      // Submit on Enter key (without Shift) and allow newlines with Shift+Enter
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault(); // Prevent standard newline character
+          const text = chatInput.value.trim();
+          if (text) {
+            handleSendMessage();
+          }
         }
       });
 
