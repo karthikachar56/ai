@@ -239,6 +239,12 @@
       from { opacity: 0; transform: translateY(-8px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    @media (max-width: 767px) {
+      .form-input {
+        font-size: 16px; /* Prevents auto-zoom on iOS Safari */
+      }
+    }
   </style>
 </head>
 <body>
