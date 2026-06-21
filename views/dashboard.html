@@ -883,6 +883,19 @@
     .mic-section.idle .mic-status-text {
       display: none !important;
     }
+    @media (min-width: 768px) {
+      .mic-section.speaking {
+        padding: 0;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+      .mic-section.speaking .equalizer,
+      .mic-section.speaking .mic-status-text {
+        display: none !important;
+      }
+    }
     .mic-glow-outer {
       position: absolute;
       inset: -16px;
