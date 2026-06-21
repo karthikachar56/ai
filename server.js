@@ -286,12 +286,23 @@ app.post('/api/generate-content', requireAuth, async (req, res) => {
       body: JSON.stringify(req.body)
     });
 
-    const data = await response.json();
-    
     if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
       return res.status(response.status).json(data);
     }
-    
+
+    if (req.body.stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      for await (const chunk of response.body) {
+        res.write(chunk);
+      }
+      res.end();
+      return;
+    }
+
+    const data = await response.json();
     res.json(data);
   } catch (err) {
     console.error("Error proxying generate-content:", err);

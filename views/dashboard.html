@@ -2203,21 +2203,16 @@
       const currentSignal = activeAbortController.signal;
       
       try {
-        // Get AI text response
-        const responseText = await generateAiResponse(currentConv.messages, text, currentSignal);
-
-        // If this request sequence was aborted, do not proceed at all
-        if (currentSignal.aborted) return;
-
+        const aiMessageId = 'ai-' + Date.now();
         const newAiMessage = {
-          id: 'ai-' + Date.now(),
+          id: aiMessageId,
           sender: 'ai',
-          text: responseText,
+          text: '', // Start empty for streaming
           timestamp: getFormattedTime(),
           isVoice: !isAudioMuted
         };
 
-        // Push AI Response
+        // Push initial AI Response placeholder
         conversations = conversations.map(c => {
           if (c.id === activeConvId) {
             return { ...c, messages: [...c.messages, newAiMessage] };
@@ -2225,17 +2220,139 @@
           return c;
         });
 
-        renderSidebar();
         renderChatTimeline();
-        saveState();
 
-        // Synthesis step if configured
-        const isError = responseText.startsWith('Connection error') || responseText.startsWith('Please configure');
-        if (!isAudioMuted && !isError) {
-          await speakAiResponse(responseText, currentSignal);
-        } else {
-          updateStatusUI('idle');
+        let processedIndex = 0;
+        let speechQueue = [];
+        let isSpeechQueueRunning = false;
+        let nextSpeechFetchPromise = null;
+        let pendingListIndicator = "";
+        let isStreamFinished = false;
+
+        const processTextChunk = (fullText, isFinal = false) => {
+          // Update AI message text in history
+          conversations = conversations.map(c => {
+            if (c.id === activeConvId) {
+              const updatedMessages = c.messages.map(m => {
+                if (m.id === aiMessageId) {
+                  return { ...m, text: fullText };
+                }
+                return m;
+              });
+              return { ...c, messages: updatedMessages };
+            }
+            return c;
+          });
+
+          renderChatTimeline();
+
+          if (isAudioMuted) return;
+
+          // Extract complete sentences from fullText dynamically
+          const foundSentences = [];
+          const sentenceRegex = /[^.!?]+[.!?]+(?=\s|$)/g;
+          const searchBuffer = fullText.substring(processedIndex);
+          
+          let match;
+          while ((match = sentenceRegex.exec(searchBuffer)) !== null) {
+            foundSentences.push(match[0].trim());
+            processedIndex += match.index + match[0].length;
+          }
+
+          if (isFinal) {
+            const remaining = fullText.substring(processedIndex).trim();
+            if (remaining) {
+              foundSentences.push(remaining);
+              processedIndex = fullText.length;
+            }
+          }
+
+          // Queue sentences to play
+          for (const s of foundSentences) {
+            const clean = s.trim();
+            if (!clean) continue;
+
+            if (/^\d+\.$/.test(clean)) {
+              pendingListIndicator = clean;
+              continue;
+            }
+
+            let sentenceToSpeak = clean;
+            if (pendingListIndicator) {
+              sentenceToSpeak = pendingListIndicator + " " + clean;
+              pendingListIndicator = "";
+            }
+
+            speechQueue.push(sentenceToSpeak);
+            triggerSpeechQueue();
+          }
+        };
+
+        async function triggerSpeechQueue() {
+          if (isSpeechQueueRunning || isAudioMuted) return;
+          isSpeechQueueRunning = true;
+
+          try {
+            updateStatusUI('speaking');
+            while (speechQueue.length > 0) {
+              if (currentSignal.aborted) break;
+
+              const textToSpeak = speechQueue.shift();
+              let audioUrl;
+
+              if (nextSpeechFetchPromise) {
+                audioUrl = await nextSpeechFetchPromise;
+                nextSpeechFetchPromise = null;
+              } else {
+                audioUrl = await fetchSentenceTts(textToSpeak, currentSignal);
+              }
+
+              if (currentSignal.aborted) {
+                if (audioUrl) URL.revokeObjectURL(audioUrl);
+                break;
+              }
+
+              if (speechQueue.length > 0) {
+                nextSpeechFetchPromise = fetchSentenceTts(speechQueue[0], currentSignal);
+              }
+
+              if (audioUrl) {
+                await playAudioUrl(audioUrl, currentSignal);
+              }
+            }
+          } catch (err) {
+            console.error("Sentence playback queue error:", err);
+          } finally {
+            isSpeechQueueRunning = false;
+            if (isStreamFinished && speechQueue.length === 0) {
+              if (isContinuousListening && !isAudioMuted && !currentSignal.aborted) {
+                updateStatusUI('listening');
+                startSpeechRecognition();
+              } else if (!currentSignal.aborted) {
+                updateStatusUI('idle');
+              }
+            }
+          }
         }
+
+        // Fetch streaming response
+        const responseText = await generateAiResponseStream(
+          currentConv.messages,
+          (fullText, chunk) => {
+            processTextChunk(fullText, false);
+          },
+          currentSignal
+        );
+
+        if (currentSignal.aborted) return;
+
+        isStreamFinished = true;
+        // Process final content slice
+        processTextChunk(responseText, true);
+
+        // Update sidebar list and store session state
+        renderSidebar();
+        saveState();
       } catch (err) {
         if (err.name === 'AbortError') {
           console.log("AI generation request aborted successfully.");
@@ -2249,7 +2366,7 @@
       }
     }
 
-    async function generateAiResponse(historyMessages, latestUserText, signal) {
+    async function generateAiResponseStream(historyMessages, onChunk, signal) {
       updateStatusUI('thinking');
 
       const systemPrompt = "You are Eetirp, an engaging and highly helpful AI Voice Companion. IMPORTANT: Respond in the exact language the user speaks or writes in (e.g. if they query in Nepali, you must respond in Nepali). Format your responses with structured markdown, utilizing bold text for key numbers and titles, clear headings, and bullet points for lists and classifications (similar to detailed cataloguing cards or Dewey Decimal Classification breakdowns) to make the text visually appealing and structured. Keep text flow easy to read aloud, avoiding long code blocks.";
@@ -2265,20 +2382,83 @@
         messages: [
           { role: "system", content: systemPrompt },
           ...sliceHistory
-        ]
+        ],
+        stream: true
       };
 
       const url = `/api/generate-content`;
+      
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey && apiKey.trim() !== '') {
+        headers['x-openai-key'] = apiKey;
+      }
 
       try {
-        const responseData = await fetchWithRetry(url, payload, 5, 1000, signal);
-        const text = responseData.choices?.[0]?.message?.content || "I was unable to formulate a response. Please try again.";
-        return text;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload),
+          signal: signal
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let fullText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (signal?.aborted) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop(); // Keep partial line in buffer
+
+          for (const line of lines) {
+            const cleanLine = line.trim();
+            if (!cleanLine) continue;
+            if (cleanLine === "data: [DONE]") continue;
+
+            if (cleanLine.startsWith("data: ")) {
+              try {
+                const jsonStr = cleanLine.substring(6);
+                const json = JSON.parse(jsonStr);
+                const content = json.choices?.[0]?.delta?.content || "";
+                if (content) {
+                  fullText += content;
+                  onChunk(fullText, content);
+                }
+              } catch (err) {
+                // Ignore partial JSON parsing errors
+              }
+            }
+          }
+        }
+
+        if (buffer.trim().startsWith("data: ")) {
+          try {
+            const jsonStr = buffer.trim().substring(6);
+            const json = JSON.parse(jsonStr);
+            const content = json.choices?.[0]?.delta?.content || "";
+            if (content) {
+              fullText += content;
+              onChunk(fullText, content);
+            }
+          } catch (e) {}
+        }
+
+        return fullText;
       } catch (err) {
         if (err.name === 'AbortError') {
           throw err;
         }
-        console.error("API Call error:", err);
+        console.error("API Streaming Call error:", err);
         return `Connection error: ${err.message || "Failed to reach AI service."} Please ensure your API key is correctly configured.`;
       }
     }
