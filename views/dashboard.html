@@ -1984,7 +1984,6 @@
     }
 
     let speechTimeout = null;
-    let finalTranscriptBuffer = '';
 
     // SPEECH INTEGRATION
     function initSpeechRecognition() {
@@ -2048,16 +2047,19 @@
         };
 
         rec.onresult = (event) => {
+          let finalTranscript = '';
           let interimTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
+          
+          for (let i = 0; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
             if (event.results[i].isFinal) {
-              finalTranscriptBuffer += event.results[i][0].transcript + ' ';
+              finalTranscript += transcript + ' ';
             } else {
-              interimTranscript += event.results[i][0].transcript;
+              interimTranscript += transcript;
             }
           }
 
-          const currentText = (finalTranscriptBuffer + interimTranscript).trim();
+          const currentText = (finalTranscript + interimTranscript).trim();
           if (currentText) {
             chatInput.value = currentText;
             sendBtn.disabled = false;
@@ -2068,7 +2070,7 @@
           // Debounce user silence to 3 seconds before stopping the microphone
           if (speechTimeout) clearTimeout(speechTimeout);
           speechTimeout = setTimeout(() => {
-            const finalSpeechText = finalTranscriptBuffer.trim() || interimTranscript.trim();
+            const finalSpeechText = finalTranscript.trim() || interimTranscript.trim();
             if (finalSpeechText) {
               isContinuousListening = false;
               recognition.stop();
@@ -2123,7 +2125,6 @@
         }
       } else {
         isContinuousListening = true;
-        finalTranscriptBuffer = ''; // Clear buffer on fresh user-initiated start
         if (recognition) {
           try {
             updateStatusUI('listening');
