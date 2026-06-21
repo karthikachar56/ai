@@ -50,6 +50,15 @@ app.use(session({
   }
 }));
 
+// Temporarily bypass authentication page by auto-logging in as a guest user
+app.use((req, res, next) => {
+  if (req.session) {
+    req.session.userId = '000000000000000000000000';
+    req.session.username = 'Guest';
+  }
+  next();
+});
+
 // Authentication Protection Middleware
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
@@ -58,22 +67,18 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: { message: "Unauthorized. Please log in." } });
 }
 
-// Root access redirects unauthenticated users to /login
+// Serve chat dashboard directly
 app.get('/', (req, res) => {
-  if (req.session && req.session.userId) {
-    res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
-  } else {
-    res.redirect('/login');
-  }
+  res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
 });
 
-// Serve public login and register pages explicitly
+// Temporarily redirect login and register pages to the root dashboard
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'index.html'));
+  res.redirect('/');
 });
 
 app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'register.html'));
+  res.redirect('/');
 });
 
 // Serve other files in views/ statically (CSS, JS, logo.jpg)
@@ -354,13 +359,9 @@ app.post('/api/generate-tts', requireAuth, async (req, res) => {
   }
 });
 
-// Fallback all other GET requests to login or home depending on authentication
+// Fallback all other GET requests to the main dashboard
 app.get('*', (req, res) => {
-  if (req.session && req.session.userId) {
-    res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
-  } else {
-    res.redirect('/login');
-  }
+  res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
 });
 
 // Boot the server if run directly (not under serverless Vercel function)
