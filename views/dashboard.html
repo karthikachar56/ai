@@ -1462,7 +1462,7 @@
     let hasServerApiKey = false;
     let isMongoActive = false;
     let isContinuousListening = false;
-    let selectedVoice = localStorage.getItem('aura_selected_voice') || 'alloy';
+    let selectedVoice = localStorage.getItem('aura_selected_voice') || 'echo';
     let isAudioMuted = localStorage.getItem('aura_audio_muted') === 'true';
     let isSettingsOpen = false;
     let isHistoryOpen = false;
@@ -2081,6 +2081,10 @@
     }
 
     function stopAudioPlayback() {
+      if (activeAbortController) {
+        activeAbortController.abort();
+        activeAbortController = null;
+      }
       if (audioElement) {
         audioElement.pause();
         audioElement.src = '';
@@ -2311,16 +2315,55 @@
       throw new Error("Failed after maximum retries");
     }
 
-    // OpenAI voice generation to binary audio converter
-    async function speakAiResponse(textToSpeak, signal) {
-      if (isAudioMuted) return;
+    // Helper function to split text into sentences (handles newlines and lists cleanly)
+    function splitIntoSentences(text) {
+      if (!text) return [];
+      const lines = text.split(/\n+/);
+      const sentences = [];
+      const sentenceRegex = /[^.!?]+[.!?]+(?=\s|$)/g;
 
-      updateStatusUI('speaking');
+      for (const line of lines) {
+        const cleanLine = line.trim();
+        if (!cleanLine) continue;
+
+        let match;
+        let lastIndex = 0;
+        const lineSentences = [];
+        while ((match = sentenceRegex.exec(cleanLine)) !== null) {
+          lineSentences.push(match[0].trim());
+          lastIndex = sentenceRegex.lastIndex;
+        }
+        const remaining = cleanLine.substring(lastIndex).trim();
+        if (remaining) {
+          lineSentences.push(remaining);
+        }
+
+        // Merge list indicators (e.g. "1.") with the subsequent segment
+        const merged = [];
+        for (let i = 0; i < lineSentences.length; i++) {
+          const s = lineSentences[i];
+          if (/^\d+\.$/.test(s) && i + 1 < lineSentences.length) {
+            merged.push(s + " " + lineSentences[i + 1]);
+            i++;
+          } else {
+            merged.push(s);
+          }
+        }
+        sentences.push(...merged);
+      }
+
+      return sentences.map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    // Helper to fetch TTS for a single sentence
+    async function fetchSentenceTts(text, signal) {
+      const cleanText = text.trim();
+      if (!cleanText) return null;
+
       const ttsUrl = `/api/generate-tts`;
-
       const payload = {
         model: "tts-1",
-        input: textToSpeak,
+        input: cleanText,
         voice: selectedVoice.toLowerCase()
       };
 
@@ -2329,56 +2372,114 @@
         headers['x-openai-key'] = apiKey;
       }
 
-      try {
-        const res = await fetch(ttsUrl, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload),
-          signal: signal
-        });
+      const res = await fetch(ttsUrl, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload),
+        signal: signal
+      });
 
-        if (signal?.aborted) return;
+      if (!res.ok) {
+        throw new Error(`TTS API yields error status: ${res.status}`);
+      }
 
-        if (!res.ok) {
-          throw new Error(`TTS API yields error status: ${res.status}`);
+      const audioBlob = await res.blob();
+      return URL.createObjectURL(audioBlob);
+    }
+
+    // Helper to play a single audio URL and wait for it to complete
+    function playAudioUrl(audioUrl, signal) {
+      return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+          URL.revokeObjectURL(audioUrl);
+          return resolve();
         }
 
-        const audioBlob = await res.blob();
-        if (signal?.aborted) return;
-
-        const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        
         audioElement = audio;
 
-        audio.onended = () => {
+        const cleanUp = () => {
+          audio.onended = null;
+          audio.onerror = null;
           URL.revokeObjectURL(audioUrl);
-          if (isContinuousListening && !isAudioMuted) {
-            updateStatusUI('listening');
-            startSpeechRecognition();
-          } else {
-            updateStatusUI('idle');
+          if (signal) {
+            signal.removeEventListener('abort', onAbort);
           }
+        };
+
+        audio.onended = () => {
+          cleanUp();
+          resolve();
         };
 
         audio.onerror = (e) => {
-          console.error("Native Audio playback issue:", e);
-          if (isContinuousListening && !isAudioMuted) {
-            updateStatusUI('listening');
-            startSpeechRecognition();
-          } else {
-            updateStatusUI('idle');
-          }
+          console.error("Audio playback error:", e);
+          cleanUp();
+          reject(e);
         };
 
-        if (signal?.aborted) {
-          URL.revokeObjectURL(audioUrl);
-          return;
+        const onAbort = () => {
+          audio.pause();
+          cleanUp();
+          resolve();
+        };
+
+        if (signal) {
+          signal.addEventListener('abort', onAbort);
         }
 
-        await audio.play();
-        if (isContinuousListening && !isAudioMuted) {
+        audio.play().catch(err => {
+          cleanUp();
+          reject(err);
+        });
+      });
+    }
+
+    // OpenAI voice generation to binary audio converter with low-latency sentence queuing
+    async function speakAiResponse(textToSpeak, signal) {
+      if (isAudioMuted) return;
+
+      const sentences = splitIntoSentences(textToSpeak);
+      if (sentences.length === 0) {
+        updateStatusUI('idle');
+        return;
+      }
+
+      updateStatusUI('speaking');
+
+      try {
+        // Pre-fetch the first sentence immediately
+        let nextFetchPromise = fetchSentenceTts(sentences[0], signal);
+
+        for (let i = 0; i < sentences.length; i++) {
+          if (signal?.aborted) break;
+
+          try {
+            const audioUrl = await nextFetchPromise;
+            if (signal?.aborted) {
+              if (audioUrl) URL.revokeObjectURL(audioUrl);
+              break;
+            }
+
+            // Start pre-fetching the next sentence in the background
+            if (i + 1 < sentences.length) {
+              nextFetchPromise = fetchSentenceTts(sentences[i + 1], signal);
+            }
+
+            if (audioUrl) {
+              await playAudioUrl(audioUrl, signal);
+            }
+          } catch (err) {
+            console.error("Sequential sentence playback failed:", err);
+          }
+        }
+
+        // Check if finished naturally without abort
+        if (isContinuousListening && !isAudioMuted && !signal?.aborted) {
+          updateStatusUI('listening');
           startSpeechRecognition();
+        } else if (!signal?.aborted) {
+          updateStatusUI('idle');
         }
       } catch (err) {
         if (err.name === 'AbortError') {
