@@ -63,6 +63,7 @@
       background-color: var(--bg-main);
       color: var(--text-main);
       height: 100vh;
+      height: 100dvh;
       width: 100vw;
       overflow: hidden;
       position: relative;
@@ -104,6 +105,7 @@
     .app-container {
       display: flex;
       height: 100vh;
+      height: 100dvh;
       width: 100%;
       position: relative;
       z-index: 10;
@@ -1017,6 +1019,8 @@
     .send-btn {
       position: absolute;
       right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
       background: rgba(37, 99, 235, 0.05);
       color: rgba(37, 99, 235, 0.4);
       border: 1px solid rgba(37, 99, 235, 0.1);
@@ -1039,7 +1043,7 @@
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
     }
     .send-btn.active:active {
-      transform: scale(0.95);
+      transform: translateY(-50%) scale(0.95);
     }
 
     /* Animations */
@@ -1155,24 +1159,25 @@
     /* Mobile responsive optimizations for the typing system and floating mic */
     @media (max-width: 767px) {
       .timeline {
-        padding: 16px 12px 130px 12px; /* Reduced bottom padding */
+        padding: 16px 12px 140px 12px; /* Reduced bottom padding */
       }
       .interaction-hub {
-        padding: 12px 16px;
+        padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 12px)) 20px; /* added safe area inset for bottom cutout */
         background: #ffffff; /* Solid white background to stand out clearly */
         border-top: 2px solid #cbd5e1;
       }
       .typing-input {
         font-size: 16px; /* Prevents auto-zoom on iOS Safari */
-        padding: 14px 48px 14px 16px;
-        border: 2px solid #3b82f6; /* High-contrast blue border */
-        background: #f8fafc;
-        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+        height: 52px; /* Explicit height to make it large and easily tapable */
+        padding: 0 52px 0 20px; /* clear padding inside */
+        border: 2px solid #2563eb; /* High-contrast solid blue border */
+        background: #ffffff;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
       }
       .typing-input:focus {
         background: #ffffff;
-        border-color: #2563eb;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+        border-color: #1d4ed8;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
       }
       .typing-input::placeholder {
         color: #475569;
