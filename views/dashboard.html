@@ -2065,14 +2065,13 @@
             adjustInputHeight();
           }
 
-          // Debounce user silence to 3 seconds before submitting
+          // Debounce user silence to 3 seconds before stopping the microphone
           if (speechTimeout) clearTimeout(speechTimeout);
           speechTimeout = setTimeout(() => {
             const finalSpeechText = finalTranscriptBuffer.trim() || interimTranscript.trim();
             if (finalSpeechText) {
-              finalTranscriptBuffer = '';
+              isContinuousListening = false;
               recognition.stop();
-              handleSendMessage(finalSpeechText, true);
             }
           }, 3000);
         };
@@ -2133,7 +2132,10 @@
           // Native simulation fallback for unsupported devices
           const simulatedText = prompt("Speech recognition is not supported or permitted in this environment. Simulate speaking by typing here:");
           if (simulatedText && simulatedText.trim()) {
-            handleSendMessage(simulatedText, true);
+            chatInput.value = simulatedText.trim();
+            sendBtn.disabled = false;
+            sendBtn.classList.add('active');
+            adjustInputHeight();
           }
         }
       }
