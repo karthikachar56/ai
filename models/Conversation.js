@@ -3,20 +3,19 @@ const mongoose = require('mongoose');
 const messageSchema = new mongoose.Schema({
   id: {
     type: String,
-    required: true
+    default: () => 'msg-' + Date.now()
   },
   sender: {
     type: String,
-    enum: ['user', 'ai'],
-    required: true
+    default: 'user'
   },
   text: {
     type: String,
-    required: true
+    default: ''
   },
   timestamp: {
     type: String,
-    required: true
+    default: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   },
   isVoice: {
     type: Boolean,
@@ -49,7 +48,7 @@ const conversationSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Pre-save hook to update updatedAt on modifications
-conversationSchema.pre('save', function(next) {
+conversationSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });

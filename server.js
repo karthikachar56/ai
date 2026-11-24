@@ -86,25 +86,40 @@ app.use(express.static(path.join(__dirname, 'views'), { index: false }));
 
 // Helper: Get API Key from server env or request headers
 function getApiKey(req) {
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') {
+    return { key: process.env.GEMINI_API_KEY.trim(), type: 'gemini' };
+  }
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== '') {
-    return process.env.OPENAI_API_KEY;
+    const k = process.env.OPENAI_API_KEY.trim();
+    if (k.startsWith('AQ.') || k.startsWith('AIza')) {
+      return { key: k, type: 'gemini' };
+    }
+    return { key: k, type: 'openai' };
   }
   if (process.env.OPEN_API_KEY && process.env.OPEN_API_KEY.trim() !== '') {
-    return process.env.OPEN_API_KEY;
+    const k = process.env.OPEN_API_KEY.trim();
+    if (k.startsWith('AQ.') || k.startsWith('AIza')) {
+      return { key: k, type: 'gemini' };
+    }
+    return { key: k, type: 'openai' };
   }
-  const clientKey = req.headers['x-openai-key'] || req.headers['x-gemini-key'];
+  const clientKey = req?.headers ? (req.headers['x-gemini-key'] || req.headers['x-openai-key']) : null;
   if (clientKey && clientKey.trim() !== '') {
-    return clientKey;
+    const k = clientKey.trim();
+    if (k.startsWith('AQ.') || k.startsWith('AIza')) {
+      return { key: k, type: 'gemini' };
+    }
+    return { key: k, type: 'openai' };
   }
   return null;
 }
 
 // Endpoint: Check API Key and MongoDB status
 app.get('/api/status', (req, res) => {
-  const hasApiKey = !!((process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== '') ||
-                       (process.env.OPEN_API_KEY && process.env.OPEN_API_KEY.trim() !== ''));
+  const apiInfo = getApiKey(req);
+  const hasApiKey = !!apiInfo;
   const isMongoActive = isMongoConfigured && mongoose.connection.readyState === 1;
-  res.json({ hasApiKey, isMongoActive });
+  res.json({ hasApiKey, provider: apiInfo ? apiInfo.type : null, isMongoActive });
 });
 
 // ==========================================
@@ -270,15 +285,141 @@ app.delete('/api/conversations/:id', requireAuth, async (req, res) => {
 // Proxy Endpoints (Protected)
 // ==========================================
 
-// Endpoint: Proxy content generation to OpenAI model
+// Endpoint: Proxy content generation to Gemini or OpenAI model
 app.post('/api/generate-content', requireAuth, async (req, res) => {
-  const apiKey = getApiKey(req);
-  if (!apiKey) {
+  const apiInfo = getApiKey(req);
+  if (!apiInfo) {
     return res.status(401).json({
-      error: { message: "OpenAI API key is missing. Please configure it in your server's .env file or input it in Settings." }
+      error: { message: "API key is missing. Please configure GEMINI_API_KEY or OPENAI_API_KEY in your .env file." }
     });
   }
 
+  // Handle Google Gemini API
+  if (apiInfo.type === 'gemini') {
+    const geminiKey = apiInfo.key;
+    const model = 'gemini-3.5-flash-lite';
+
+    // Convert OpenAI message format to Gemini format
+    const contents = [];
+    let systemInstruction = undefined;
+    for (const msg of req.body.messages || []) {
+      if (msg.role === 'system') {
+        systemInstruction = { parts: [{ text: msg.content }] };
+      } else {
+        const text = msg.content ? String(msg.content).trim() : '';
+        if (!text) continue; // Skip empty messages like assistant placeholders
+
+        const role = msg.role === 'assistant' ? 'model' : 'user';
+        // Merge consecutive messages of the same role
+        if (contents.length > 0 && contents[contents.length - 1].role === role) {
+          contents[contents.length - 1].parts[0].text += '\n\n' + text;
+        } else {
+          contents.push({
+            role: role,
+            parts: [{ text: text }]
+          });
+        }
+      }
+    }
+
+    // Gemini requires the conversation history to start with a 'user' turn
+    while (contents.length > 0 && contents[0].role !== 'user') {
+      contents.shift();
+    }
+
+    // Gemini strictly requires the final turn to be a 'user' turn
+    while (contents.length > 0 && contents[contents.length - 1].role !== 'user') {
+      contents.pop();
+    }
+
+    // Safety fallback: if no valid user turn remains, provide a default
+    if (contents.length === 0) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: 'Hello' }]
+      });
+    }
+
+    const geminiPayload = { contents };
+    if (systemInstruction) {
+      geminiPayload.systemInstruction = systemInstruction;
+    }
+
+    try {
+      if (req.body.stream) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${geminiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(geminiPayload)
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          return res.status(response.status).json(errData);
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const clean = line.trim();
+            if (!clean.startsWith('data: ')) continue;
+            try {
+              const json = JSON.parse(clean.substring(6));
+              const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                const sseData = JSON.stringify({
+                  choices: [{ delta: { content: text } }]
+                });
+                res.write(`data: ${sseData}\n\n`);
+              }
+            } catch (e) {}
+          }
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
+      // Non-streaming fallback
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiPayload)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return res.status(response.status).json(data);
+      }
+
+      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      res.json({
+        choices: [{ message: { role: 'assistant', content: replyText } }]
+      });
+    } catch (err) {
+      console.error('Error proxying generate-content with Gemini:', err);
+      res.status(500).json({ error: { message: 'Internal server error connecting to Gemini API.' } });
+    }
+    return;
+  }
+
+  // Handle OpenAI API
+  const apiKey = apiInfo.key;
   const url = 'https://api.openai.com/v1/chat/completions';
 
   try {
@@ -319,13 +460,19 @@ app.post('/api/generate-content', requireAuth, async (req, res) => {
 
 // Endpoint: Proxy Text-to-Speech requests to OpenAI model
 app.post('/api/generate-tts', requireAuth, async (req, res) => {
-  const apiKey = getApiKey(req);
-  if (!apiKey) {
+  const apiInfo = getApiKey(req);
+  if (!apiInfo) {
     return res.status(401).json({
-      error: { message: "OpenAI API key is missing. Please configure it in your server's .env file or input it in Settings." }
+      error: { message: "API key is missing. Please configure GEMINI_API_KEY or OPENAI_API_KEY in your server's .env file." }
     });
   }
 
+  if (apiInfo.type === 'gemini') {
+    // Return 404 to let client fall back smoothly to the browser's native WebSpeech API
+    return res.status(404).json({ error: { message: "Using browser native WebSpeech synthesizer for Gemini." } });
+  }
+
+  const apiKey = apiInfo.key;
   const url = 'https://api.openai.com/v1/audio/speech';
 
   try {
@@ -367,12 +514,11 @@ app.get('*', (req, res) => {
 // Boot the server if run directly (not under serverless Vercel function)
 if (require.main === module) {
   app.listen(PORT, () => {
-    const hasKey = !!((process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== '') || 
-                      (process.env.OPEN_API_KEY && process.env.OPEN_API_KEY.trim() !== ''));
+    const apiInfo = getApiKey({ headers: {} });
     console.log(`==================================================`);
     console.log(` Eetirp Voice AI Chatbot server started!`);
     console.log(` Local host: http://localhost:${PORT}`);
-    console.log(` Server-side OpenAI key configured: ${hasKey ? 'YES' : 'NO (Using client settings key)'}`);
+    console.log(` AI Provider configured: ${apiInfo ? apiInfo.type.toUpperCase() : 'NO (Using client settings key)'}`);
     console.log(`==================================================`);
   });
 }
