@@ -46,39 +46,40 @@ app.use(session({
   store: isMongoConfigured ? MongoStore.create({ mongoUrl: MONGODB_URI }) : undefined,
   cookie: {
     secure: process.env.NODE_ENV === 'production' || !!process.env.VERCEL, // Set to true if using HTTPS or running on Vercel
-    maxAge: 24 * 60 * 60 * 1000 // 1 day
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days persistent login
   }
 }));
-
-// Temporarily bypass authentication page by auto-logging in as a guest user
-app.use((req, res, next) => {
-  if (req.session) {
-    req.session.userId = '000000000000000000000000';
-    req.session.username = 'Guest';
-  }
-  next();
-});
 
 // Authentication Protection Middleware
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
     return next();
   }
-  res.status(401).json({ error: { message: "Unauthorized. Please log in." } });
+  res.status(401).json({ error: { message: "Unauthorized. Please sign in." } });
 }
 
-// Serve chat dashboard directly
+// Root route: Serve chat dashboard if authenticated, or redirect to sign-in on first visit
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
+  if (req.session && req.session.userId) {
+    return res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
+  }
+  res.redirect('/login');
 });
 
-// Temporarily redirect login and register pages to the root dashboard
+// Sign-in portal route
 app.get('/login', (req, res) => {
-  res.redirect('/');
+  if (req.session && req.session.userId) {
+    return res.redirect('/');
+  }
+  res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
+// Registration portal route
 app.get('/register', (req, res) => {
-  res.redirect('/');
+  if (req.session && req.session.userId) {
+    return res.redirect('/');
+  }
+  res.sendFile(path.join(__dirname, 'views', 'register.html'));
 });
 
 // Serve other files in views/ statically (CSS, JS, logo.jpg)
@@ -126,34 +127,78 @@ app.get('/api/status', (req, res) => {
 // Authentication Endpoints
 // ==========================================
 
-// Endpoint: Register User
+// Endpoint: Register User (First-time user sign up)
 app.post('/api/auth/register', async (req, res) => {
   if (!isMongoConfigured || mongoose.connection.readyState !== 1) {
     return res.status(503).json({
-      error: { message: "Database is not connected. User registration is unavailable." }
+      error: { message: "Database is not connected. User registration is temporarily unavailable." }
     });
   }
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: { message: "Username, email, and password are required." } });
+  const { name, username, email, mobile, password } = req.body;
+
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: { message: "Gmail address is mandatory." } });
   }
 
+  const cleanEmail = email.toLowerCase().trim();
+  if (!cleanEmail.endsWith('@gmail.com') || !/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(cleanEmail)) {
+    return res.status(400).json({ error: { message: "Only Gmail addresses (@gmail.com) are allowed." } });
+  }
+
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: { message: "Password must be at least 6 characters long." } });
+  }
+
+  // Generate a friendly username if not explicitly provided
+  const emailPrefix = cleanEmail.split('@')[0];
+  const derivedUsername = (username && username.trim()) 
+    ? username.trim() 
+    : (name && name.trim()) 
+      ? name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Math.floor(100 + Math.random() * 900)
+      : emailPrefix;
+
   try {
-    const existingUser = await User.findOne({ $or: [{ email: email.toLowerCase() }, { username }] });
+    const existingUser = await User.findOne({ 
+      $or: [
+        { email: cleanEmail }, 
+        { username: derivedUsername }
+      ] 
+    });
     if (existingUser) {
-      return res.status(400).json({ error: { message: "Username or email is already registered." } });
+      if (existingUser.email === cleanEmail) {
+        return res.status(400).json({ error: { message: "This Gmail is already registered. Please Sign In." } });
+      }
     }
 
-    const newUser = new User({ username, email, password });
+    const newUser = new User({
+      name: name ? name.trim() : (username || emailPrefix),
+      username: derivedUsername,
+      email: cleanEmail,
+      mobile: mobile ? mobile.trim() : '',
+      password
+    });
     await newUser.save();
 
-    req.session.userId = newUser._id;
-    req.session.username = newUser.username;
+    req.session.userId = newUser._id.toString();
+    req.session.username = newUser.name || newUser.username;
+    req.session.email = newUser.email;
 
-    res.status(201).json({ message: "Registration successful.", user: { id: newUser._id, username: newUser.username } });
+    req.session.save(err => {
+      if (err) console.error("Session save error on register:", err);
+      res.status(201).json({
+        message: "Registration successful.",
+        user: {
+          id: newUser._id,
+          name: newUser.name,
+          username: newUser.username,
+          email: newUser.email,
+          mobile: newUser.mobile
+        }
+      });
+    });
   } catch (err) {
     console.error("Registration error:", err);
-    res.status(500).json({ error: { message: "Failed to register user." } });
+    res.status(500).json({ error: { message: err.message || "Failed to register user." } });
   }
 });
 
@@ -161,37 +206,52 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   if (!isMongoConfigured || mongoose.connection.readyState !== 1) {
     return res.status(503).json({
-      error: { message: "Database is not connected. Authentication is unavailable." }
+      error: { message: "Database is not connected. Authentication is temporarily unavailable." }
     });
   }
   const { identifier, password } = req.body;
   if (!identifier || !password) {
-    return res.status(400).json({ error: { message: "Username/email and password are required." } });
+    return res.status(400).json({ error: { message: "Gmail address and password are required." } });
   }
+
+  const cleanIdentifier = identifier.toLowerCase().trim();
 
   try {
     const user = await User.findOne({
       $or: [
-        { email: identifier.toLowerCase() },
-        { username: identifier }
+        { email: cleanIdentifier },
+        { username: cleanIdentifier }
       ]
     });
 
     if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ error: { message: "Invalid credentials. Please try again." } });
+      return res.status(401).json({ error: { message: "Invalid Gmail address or password. Please try again." } });
     }
 
-    req.session.userId = user._id;
-    req.session.username = user.username;
+    req.session.userId = user._id.toString();
+    req.session.username = user.name || user.username;
+    req.session.email = user.email;
 
-    res.json({ message: "Login successful.", user: { id: user._id, username: user.username } });
+    req.session.save(err => {
+      if (err) console.error("Session save error on login:", err);
+      res.json({
+        message: "Login successful.",
+        user: {
+          id: user._id,
+          name: user.name || user.username,
+          username: user.username,
+          email: user.email,
+          mobile: user.mobile
+        }
+      });
+    });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: { message: "Internal server error during login." } });
   }
 });
 
-// Endpoint: Logout User
+// Endpoint: Logout User (Clears session & cookie)
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy(err => {
     if (err) {
@@ -204,12 +264,25 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Endpoint: Get current user profile
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   if (req.session && req.session.userId) {
-    res.json({ user: { id: req.session.userId, username: req.session.username } });
-  } else {
-    res.status(401).json({ error: { message: "Not authenticated." } });
+    try {
+      const user = await User.findById(req.session.userId).select('-password');
+      if (user) {
+        return res.json({
+          user: {
+            id: user._id,
+            name: user.name || user.username,
+            username: user.username,
+            email: user.email,
+            mobile: user.mobile
+          }
+        });
+      }
+    } catch (e) {}
+    return res.json({ user: { id: req.session.userId, username: req.session.username, email: req.session.email } });
   }
+  res.status(401).json({ error: { message: "Not authenticated." } });
 });
 
 // ==========================================

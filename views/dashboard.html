@@ -1950,7 +1950,7 @@
         const res = await fetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
-          loggedInUsername = data.user.username;
+          loggedInUsername = data.user.name || data.user.username || 'Student';
 
           if (loggedInUserEl) {
             loggedInUserEl.textContent = loggedInUsername;
@@ -2637,7 +2637,11 @@ FORMATTING RULES:
           if (confirm("Are you sure you want to sign out?")) {
             try {
               const res = await fetch('/api/auth/logout', { method: 'POST' });
-              if (res.ok) window.location.href = '/login';
+              if (res.ok) {
+                localStorage.removeItem('aura_conversations');
+                localStorage.removeItem('aura_active_conv_id');
+                window.location.href = '/login';
+              }
             } catch (err) {
               console.error("Sign out error:", err);
             }

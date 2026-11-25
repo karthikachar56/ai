@@ -3,23 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eetirp - Corporate Portal Access</title>
+  <title>Eetirp - AI Student Tutor Sign In</title>
   <!-- Google Fonts Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2 family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
       --bg-main: #f8fafc;
-      --bg-card: rgba(255, 255, 255, 0.85);
+      --bg-card: rgba(255, 255, 255, 0.92);
       --border-color: #e2e8f0;
       --border-focus: #2563eb;
       --text-main: #0f172a;
-      --text-muted: #475569;
-      --purple-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      --purple-gradient-hover: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
       --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     }
 
@@ -33,17 +34,17 @@
       font-family: var(--font-sans);
       background-color: var(--bg-main);
       color: var(--text-main);
-      height: 100vh;
-      height: 100dvh;
+      min-height: 100vh;
       width: 100vw;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
       position: relative;
+      overflow-x: hidden;
+      padding: 20px;
     }
 
-    /* Background glow decorations */
+    /* Ambient background gradient glow */
     .bg-decorations {
       position: absolute;
       top: 0;
@@ -58,56 +59,61 @@
       position: absolute;
       top: -10%;
       left: -10%;
-      width: 50%;
-      height: 50%;
+      width: 55%;
+      height: 55%;
       border-radius: 50%;
-      background: rgba(37, 99, 235, 0.05);
-      filter: blur(120px);
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, transparent 70%);
+      filter: blur(80px);
     }
     .bg-glow-2 {
       position: absolute;
       bottom: -10%;
       right: -10%;
-      width: 50%;
-      height: 50%;
+      width: 55%;
+      height: 55%;
       border-radius: 50%;
-      background: rgba(13, 148, 136, 0.05);
-      filter: blur(120px);
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+      filter: blur(80px);
     }
 
-    /* Login Container */
-    .login-container {
+    /* Main Container */
+    .auth-container {
       width: 100%;
-      max-width: 440px;
-      padding: 24px;
+      max-width: 460px;
       position: relative;
       z-index: 10;
     }
 
-    .login-card {
+    .auth-card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
       border-radius: 20px;
-      padding: 40px 32px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
-      backdrop-filter: blur(16px);
+      padding: 36px 32px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.05);
+      backdrop-filter: blur(20px);
       display: flex;
       flex-direction: column;
-      gap: 28px;
+      gap: 22px;
     }
 
-    /* Header Branding */
+    /* Brand Header */
     .brand-header {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       text-align: center;
     }
-    .brand-logo {
-      height: 48px;
-      border-radius: 8px;
-      object-fit: contain;
+    .brand-logo-wrap {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+      border: 1px solid rgba(37, 99, 235, 0.15);
     }
     .brand-name {
       font-size: 24px;
@@ -116,27 +122,94 @@
       color: var(--text-main);
     }
     .brand-tagline {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 13px;
       color: var(--text-muted);
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+    }
+
+    /* Tab switcher */
+    .tab-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      gap: 4px;
+    }
+    .tab-btn {
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tab-btn.active {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Alert Banner */
+    .alert-banner {
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      line-height: 1.4;
+      animation: fadeIn 0.2s ease;
+    }
+    .alert-banner.error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+    }
+    .alert-banner.success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #16a34a;
+    }
+    .alert-banner.warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #b45309;
     }
 
     /* Forms */
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 20px;
+      gap: 6px;
+      margin-bottom: 14px;
     }
     .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .form-label .badge-opt {
+      font-size: 11px;
+      font-weight: normal;
+      color: #94a3b8;
+    }
+    .form-label .badge-req {
       font-size: 11px;
       font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      color: #2563eb;
     }
+
     .input-wrapper {
       position: relative;
       display: flex;
@@ -145,15 +218,15 @@
     .input-icon {
       position: absolute;
       left: 14px;
-      color: var(--text-muted);
+      color: #94a3b8;
       pointer-events: none;
     }
     .form-input {
       width: 100%;
-      background: rgba(255, 255, 255, 0.9);
+      background: white;
       border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 12px 14px 12px 42px;
+      border-radius: 11px;
+      padding: 11px 14px 11px 40px;
       color: var(--text-main);
       font-size: 14px;
       outline: none;
@@ -161,33 +234,12 @@
     }
     .form-input:focus {
       border-color: var(--border-focus);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      background: white;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
     }
-
-    /* Error / Warning Alert Banner */
-    .alert-banner {
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      display: none;
-      animation: fadeIn 0.3s ease;
-    }
-    .alert-banner.error {
-      background: rgba(239, 68, 68, 0.08);
-      border: 1px solid rgba(239, 68, 68, 0.2);
-      color: #dc2626;
-    }
-    .alert-banner.warning {
-      background: rgba(245, 158, 11, 0.08);
-      border: 1px solid rgba(245, 158, 11, 0.2);
-      color: #b45309;
-    }
-    .alert-banner i {
-      flex-shrink: 0;
+    .form-hint {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 2px;
     }
 
     /* Submit Button */
@@ -197,24 +249,24 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 14px;
-      border-radius: 12px;
-      background: var(--purple-gradient);
+      padding: 13px;
+      border-radius: 11px;
+      background: var(--primary-gradient);
       color: white;
       font-weight: 600;
-      font-size: 15px;
+      font-size: 14px;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
-      margin-top: 8px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+      margin-top: 6px;
     }
     .btn-submit:hover {
-      background: var(--purple-gradient-hover);
-      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
+      opacity: 0.95;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.28);
     }
     .btn-submit:active {
-      transform: scale(0.98);
+      transform: scale(0.99);
     }
     .btn-submit:disabled {
       background: #cbd5e1;
@@ -223,42 +275,33 @@
       color: #64748b;
     }
 
-    /* Footer links */
     .card-footer {
       text-align: center;
       font-size: 13px;
       color: var(--text-muted);
-      margin-top: 8px;
+      margin-top: 4px;
     }
     .card-link {
       color: #2563eb;
       text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s;
+      font-weight: 600;
+      cursor: pointer;
     }
     .card-link:hover {
-      color: #1d4ed8;
       text-decoration: underline;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-8px); }
+      from { opacity: 0; transform: translateY(-6px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    @media (max-width: 767px) {
-      .form-input {
-        font-size: 16px; /* Prevents auto-zoom on iOS Safari */
-      }
-      .login-container {
-        padding: 16px;
-      }
-      .login-card {
-        padding: 32px 20px;
-        gap: 20px;
+    @media (max-width: 480px) {
+      .auth-card {
+        padding: 26px 20px;
       }
       .brand-name {
-        font-size: 20px;
+        font-size: 22px;
       }
     }
   </style>
@@ -271,94 +314,181 @@
     <div class="bg-glow-2"></div>
   </div>
 
-  <!-- LOGIN PANEL -->
-  <div class="login-container">
-    <div class="login-card">
+  <div class="auth-container">
+    <div class="auth-card">
       
-      <!-- Brand Logo header -->
+      <!-- Brand Logo Header -->
       <div class="brand-header">
-        <img src="/logo.jpg" alt="Eetirp Logo" class="brand-logo">
+        <div class="brand-logo-wrap">
+          <i data-lucide="graduation-cap" style="height: 28px; width: 28px; color: var(--primary);"></i>
+        </div>
         <h1 class="brand-name">Eetirp</h1>
-        <p class="brand-tagline">Innovate. Integrate. Elevate.</p>
+        <p class="brand-tagline">AI Student Tutor & Study Companion 🎓</p>
       </div>
 
-      <!-- Alert banners -->
+      <!-- Tab Switcher -->
+      <div class="tab-nav">
+        <button class="tab-btn active" id="tabSignInBtn" type="button">
+          <i data-lucide="log-in" style="height: 15px; width: 15px;"></i>
+          <span>Sign In</span>
+        </button>
+        <button class="tab-btn" id="tabRegisterBtn" type="button">
+          <i data-lucide="user-plus" style="height: 15px; width: 15px;"></i>
+          <span>Create Account</span>
+        </button>
+      </div>
+
+      <!-- Alert Box -->
       <div class="alert-banner" id="alertBox">
         <span id="alertIconContainer" style="display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-          <i data-lucide="alert-circle" style="height: 18px; width: 18px;"></i>
+          <i data-lucide="alert-circle" style="height: 16px; width: 16px;"></i>
         </span>
         <span id="alertMsg">Error message</span>
       </div>
 
-      <!-- Login Form -->
-      <form id="loginForm">
+      <!-- SIGN IN FORM (Returning user / post-logout) -->
+      <form id="signInForm">
         <div class="form-group">
-          <label class="form-label" for="identifier">Username or Email</label>
+          <label class="form-label" for="loginIdentifier">
+            <span>Gmail Address</span>
+            <span class="badge-req">Mandatory</span>
+          </label>
           <div class="input-wrapper">
-            <i class="input-icon" data-lucide="user" style="height: 18px; width: 18px;"></i>
-            <input class="form-input" type="text" id="identifier" placeholder="Enter email or username" required autocomplete="username">
+            <i class="input-icon" data-lucide="mail" style="height: 17px; width: 17px;"></i>
+            <input class="form-input" type="email" id="loginIdentifier" placeholder="student@gmail.com" required autocomplete="email">
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="password">Password</label>
+          <label class="form-label" for="loginPassword">
+            <span>Password</span>
+          </label>
           <div class="input-wrapper">
-            <i class="input-icon" data-lucide="lock" style="height: 18px; width: 18px;"></i>
-            <input class="form-input" type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+            <i class="input-icon" data-lucide="lock" style="height: 17px; width: 17px;"></i>
+            <input class="form-input" type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
           </div>
         </div>
 
-        <button class="btn-submit" type="submit" id="submitBtn">
-          <span>Sign In</span>
-          <i data-lucide="arrow-right" style="height: 18px; width: 18px;"></i>
+        <button class="btn-submit" type="submit" id="loginSubmitBtn">
+          <span>Sign In to Study</span>
+          <i data-lucide="arrow-right" style="height: 16px; width: 16px;"></i>
         </button>
+
+        <div class="card-footer">
+          First time studying with Eetirp?
+          <a class="card-link" id="linkToRegister">Create an Account</a>
+        </div>
       </form>
 
-      <!-- Footer sign up redirect -->
-      <div class="card-footer">
-        Don't have an account? 
-        <a class="card-link" href="/register">Create Account</a>
-      </div>
+      <!-- CREATE ACCOUNT FORM (First time user) -->
+      <form id="registerForm" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" for="regName">
+            <span>Your Name</span>
+            <span class="badge-opt">(Student Name)</span>
+          </label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="user" style="height: 17px; width: 17px;"></i>
+            <input class="form-input" type="text" id="regName" placeholder="e.g. Karthik Achar" required autocomplete="name">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regEmail">
+            <span>Gmail Address</span>
+            <span class="badge-req">Mandatory (@gmail.com)</span>
+          </label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="mail" style="height: 17px; width: 17px;"></i>
+            <input class="form-input" type="email" id="regEmail" placeholder="yourname@gmail.com" required autocomplete="email">
+          </div>
+          <span class="form-hint">Must end with @gmail.com</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regMobile">
+            <span>Mobile Number</span>
+            <span class="badge-opt">Optional</span>
+          </label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="phone" style="height: 17px; width: 17px;"></i>
+            <input class="form-input" type="tel" id="regMobile" placeholder="e.g. +91 9876543210 (Optional)" autocomplete="tel">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regPassword">
+            <span>Create Password</span>
+            <span class="badge-req">Min 6 characters</span>
+          </label>
+          <div class="input-wrapper">
+            <i class="input-icon" data-lucide="lock" style="height: 17px; width: 17px;"></i>
+            <input class="form-input" type="password" id="regPassword" placeholder="Create a secure password" minlength="6" required autocomplete="new-password">
+          </div>
+        </div>
+
+        <button class="btn-submit" type="submit" id="regSubmitBtn">
+          <span>Create Account & Start Learning</span>
+          <i data-lucide="arrow-right" style="height: 16px; width: 16px;"></i>
+        </button>
+
+        <div class="card-footer">
+          Already have an account?
+          <a class="card-link" id="linkToSignIn">Sign In</a>
+        </div>
+      </form>
 
     </div>
   </div>
 
   <script>
-    // Initialize icons
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
 
-    const loginForm = document.getElementById('loginForm');
-    const identifierInput = document.getElementById('identifier');
-    const passwordInput = document.getElementById('password');
+    const tabSignInBtn = document.getElementById('tabSignInBtn');
+    const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+    const signInForm = document.getElementById('signInForm');
+    const registerForm = document.getElementById('registerForm');
+    const linkToRegister = document.getElementById('linkToRegister');
+    const linkToSignIn = document.getElementById('linkToSignIn');
     const alertBox = document.getElementById('alertBox');
     const alertMsg = document.getElementById('alertMsg');
-    const submitBtn = document.getElementById('submitBtn');
+    const alertIconContainer = document.getElementById('alertIconContainer');
 
-    // Check system connection status on load
-    window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        const response = await fetch('/api/status');
-        if (response.ok) {
-          const data = await response.json();
-          if (!data.isMongoActive) {
-            showAlert("Database connection is currently offline. Local fallback authentication is active.", "warning");
-          }
-        }
-      } catch (err) {
-        console.error("Connection check failed:", err);
+    function switchTab(mode) {
+      hideAlert();
+      if (mode === 'register') {
+        tabRegisterBtn.classList.add('active');
+        tabSignInBtn.classList.remove('active');
+        registerForm.style.display = 'block';
+        signInForm.style.display = 'none';
+      } else {
+        tabSignInBtn.classList.add('active');
+        tabRegisterBtn.classList.remove('active');
+        signInForm.style.display = 'block';
+        registerForm.style.display = 'none';
       }
-    });
+      if (window.lucide) lucide.createIcons();
+    }
 
-    function showAlert(msg, type = "error") {
+    tabSignInBtn.addEventListener('click', () => switchTab('signin'));
+    tabRegisterBtn.addEventListener('click', () => switchTab('register'));
+    linkToRegister.addEventListener('click', () => switchTab('register'));
+    linkToSignIn.addEventListener('click', () => switchTab('signin'));
+
+    // Check URL parameters (e.g. ?tab=register)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab') === 'register' || window.location.pathname.includes('register')) {
+      switchTab('register');
+    }
+
+    function showAlert(msg, type = 'error') {
       alertMsg.textContent = msg;
       alertBox.className = `alert-banner ${type}`;
       alertBox.style.display = 'flex';
-      
-      const iconName = type === "warning" ? 'alert-triangle' : 'alert-circle';
-      const iconContainer = document.getElementById('alertIconContainer');
-      if (iconContainer) {
-        iconContainer.innerHTML = `<i data-lucide="${iconName}" style="height: 18px; width: 18px;"></i>`;
-        lucide.createIcons();
+      const iconName = type === 'success' ? 'check-circle' : type === 'warning' ? 'alert-triangle' : 'alert-circle';
+      if (alertIconContainer) {
+        alertIconContainer.innerHTML = `<i data-lucide="${iconName}" style="height: 16px; width: 16px;"></i>`;
+        if (window.lucide) lucide.createIcons();
       }
     }
 
@@ -366,45 +496,108 @@
       alertBox.style.display = 'none';
     }
 
-    loginForm.addEventListener('submit', async (e) => {
+    // SIGN IN HANDLER
+    signInForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       hideAlert();
 
-      const identifier = identifierInput.value.trim();
-      const password = passwordInput.value;
+      const identifier = document.getElementById('loginIdentifier').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const submitBtn = document.getElementById('loginSubmitBtn');
 
       if (!identifier || !password) {
-        showAlert("All fields are required.");
+        showAlert('Please provide both Gmail and Password.');
         return;
       }
 
       submitBtn.disabled = true;
-      submitBtn.querySelector('span').textContent = "Authenticating...";
+      submitBtn.querySelector('span').textContent = 'Signing in...';
 
       try {
-        const response = await fetch('/api/auth/login', {
+        const res = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ identifier, password })
         });
+        const data = await res.json();
 
-        const data = await response.json();
-
-        if (response.ok) {
-          // Success redirection to console dashboard
-          window.location.href = '/';
+        if (res.ok) {
+          showAlert('Signed in successfully! Opening dashboard...', 'success');
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 400);
         } else {
-          showAlert(data.error?.message || "Authentication failed. Try again.");
+          showAlert(data.error?.message || 'Invalid Gmail address or password.');
           submitBtn.disabled = false;
-          submitBtn.querySelector('span').textContent = "Sign In";
+          submitBtn.querySelector('span').textContent = 'Sign In to Study';
         }
       } catch (err) {
-        console.error("Login request failed:", err);
-        showAlert("Failed to connect to authentication server. Please check your network.");
+        console.error('Sign in error:', err);
+        showAlert('Network error. Please make sure the server is running.');
         submitBtn.disabled = false;
-        submitBtn.querySelector('span').textContent = "Sign In";
+        submitBtn.querySelector('span').textContent = 'Sign In to Study';
+      }
+    });
+
+    // CREATE ACCOUNT (FIRST-TIME REGISTRATION) HANDLER
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert();
+
+      const name = document.getElementById('regName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const mobile = document.getElementById('regMobile').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const submitBtn = document.getElementById('regSubmitBtn');
+
+      if (!name) {
+        showAlert('Please provide your name.');
+        return;
+      }
+
+      if (!email) {
+        showAlert('Gmail address is mandatory.');
+        return;
+      }
+
+      // Mandatory Gmail validation
+      const emailLower = email.toLowerCase();
+      if (!emailLower.endsWith('@gmail.com') || !/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(emailLower)) {
+        showAlert('Gmail is mandatory! Please enter a valid @gmail.com address.');
+        return;
+      }
+
+      if (!password || password.length < 6) {
+        showAlert('Password must be at least 6 characters.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.querySelector('span').textContent = 'Creating Account...';
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email: emailLower, mobile, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showAlert('Account created successfully! Welcome to Eetirp.', 'success');
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 500);
+        } else {
+          showAlert(data.error?.message || 'Registration failed. Try again.');
+          submitBtn.disabled = false;
+          submitBtn.querySelector('span').textContent = 'Create Account & Start Learning';
+        }
+      } catch (err) {
+        console.error('Register error:', err);
+        showAlert('Network error. Please make sure the server is running.');
+        submitBtn.disabled = false;
+        submitBtn.querySelector('span').textContent = 'Create Account & Start Learning';
       }
     });
   </script>
